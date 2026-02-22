@@ -1,0 +1,12 @@
+{
+	"database":{
+		"host":"",
+		"user":"",
+		"port":3006,
+		"password":""
+	},
+	"smtp":{
+		"email":"",
+		"password":""
+	}
+}

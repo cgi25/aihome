@@ -10,8 +10,44 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import wmi
+import json
 
 
+# 读取配置文件
+try:
+    with open("./config.json", "r", encoding='utf-8') as f:
+        config = json.loads(f.read())
+except Exception as e:
+    print(f"读取配置文件失败：{e}")
+    sys.exit(-1)
+
+db = pymysql.connect(host=config["database"]["host"],
+                     port=config["database"]["port"],
+                     user=config["database"]["user"],
+                     password=config["database"]["password"],
+                     database='aihomeuserinfo')
+cursor = db.cursor()
+
+db2 = pymysql.connect(host=config["database"]["host"],
+                      port=config["database"]["port"],
+                      user=config["database"]["user"],
+                      password=config["database"]["password"],
+                      database='aihomeuserinfo')
+cursor2 = db2.cursor()
+
+devicedb = pymysql.connect(host=config["database"]["host"],
+                           port=config["database"]["port"],
+                           user=config["database"]["user"],
+                           password=config["database"]["password"],
+                           database='aihomedevicesinfo')
+devicedbconn = devicedb.cursor()
+
+code = pymysql.connect(host=config["database"]["host"],
+                       port=config["database"]["port"],
+                       user=config["database"]["user"],
+                       password=config["database"]["password"],
+                       database='code',autocommit=True)
+codeconn = code.cursor()
 
 def redeviceid(devicename, logedid):
     print(devicename)
@@ -191,26 +227,10 @@ def checkdevice():
             else:
                 print("注册号有误。您的硬盘序列号在我们的服务器上注册过，但您不必担心，我们可以为您重新获取注册号。")
                 print("我们将改为使用7位随机数作为您的deviceid。这可能会降低控制的准确性与安全性。如果您不同意，请在10秒内退出注册程序，并停止使用该软件，或者咨询服务人员cgi2024@outlook.com寻求帮助。")
-                print("剩余时间：10s")
+                for i in range(10):
+                    print(f"剩余时间：{i}s")
+                    time.sleep(1)
                 time.sleep(1)
-                print("剩余时间：9s")
-                time.sleep(1)
-                print("剩余时间：8s")
-                time.sleep(1)
-                print("剩余时间：7s")
-                time.sleep(1)
-                print("剩余时间：6s")
-                time.sleep(1)
-                print("剩余时间：5s")
-                time.sleep(1)
-                print("剩余时间：4s")
-                time.sleep(1)
-                print("剩余时间：3s")
-                time.sleep(1)
-                print("剩余时间：2s")
-                time.sleep(1)
-                print("剩余时间：1s")
-                time.sleep(2)
                 print("看起来您同意以随机数的形式生成deviceid。我们将继续操作。")
                 deviceid = random.randint(4_263_897, 9_999_999)
                 print("注册号获取完成。")
@@ -337,7 +357,8 @@ def checklisten():
 
     if codeinfofile == 1:
         
-
+        code = pymysql.connect(host='154.37.215.80',port=3006,user='root',password='4wRlHrSQjl4pqZqP',database='code')
+        codeconn = code.cursor()
 
 
 
@@ -404,7 +425,7 @@ def listen():
             time.sleep(1)
     else:
         print("还未登录。请登录。")
-        subprocess.Popen([sys.executable, r".\main.py"], creationflags=subprocess.CREATE_NEW_CONSOLE); sys.exit(0)    
+        subprocess.Popen([sys.executable, r".\main.py"], creationflags=subprocess.CREATE_NEW_CONSOLE); sys.exit(0)
 
 print("这是多设备文字控制系统受控端。请注册或登录。")
 print("请从下方操作中选择，并键入其左侧对应的代号：")
@@ -423,6 +444,9 @@ if userinput == "1":
     print("设置邮箱以便我们与您取得联系。我们的管理人员会不定期检查您的邮箱地址，若发现无效，我们会删除您的账户。")
     setemail=input("请于此键入您的常用邮箱：")
     rcode = random.randint(256598, 998526)
+    sender_email = config["smtp"]["email"]
+    receiver_email = setemail
+    password = config["smtp"]["password"]
 
     message = MIMEMultipart()
     message["From"] = sender_email
@@ -510,6 +534,9 @@ elif userinput == "2":
                     if lver == 1:
                             print("您的账户在注册时启用了两步验证。我们将验证您的电子邮箱。")
                             rcode = random.randint(256598, 998526)
+                            sender_email = config["smtp"]["email"]
+                            receiver_email = lveremail
+                            password = config["smtp"]["password"]
 
                             message = MIMEMultipart()
                             message["From"] = sender_email
@@ -586,6 +613,9 @@ elif userinput == "2":
                     if lver == 1:
                             print("您的账户在注册时启用了两步验证。我们将验证您的电子邮箱。")
                             rcode = random.randint(256598, 998526)
+                            sender_email = config["smtp"]["email"]
+                            receiver_email = lveremail
+                            password = config["smtp"]["password"]
 
                             message = MIMEMultipart()
                             message["From"] = sender_email
@@ -665,6 +695,9 @@ elif userinput == "2":
                     if lver == 1:
                             print("您的账户在注册时启用了两步验证。我们将验证您的电子邮箱。")
                             rcode = random.randint(256598, 998526)
+                            sender_email = config["smtp"]["email"]
+                            receiver_email = lveremail
+                            password = config["smtp"]["password"]
 
                             message = MIMEMultipart()
                             message["From"] = sender_email
