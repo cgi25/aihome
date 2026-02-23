@@ -1,5 +1,4 @@
-import pymysql
-import requests 
+import requests
 import random
 import os
 import ctypes, sys
@@ -7,9 +6,6 @@ from pathlib import Path
 import json
 import time
 import sys, subprocess
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import wmi
 
 API = "https://api.cgi26.cn"
@@ -40,7 +36,7 @@ def redeviceid(devicename):
 
     return ''.join([str(random.randint(0, 9)) for _ in range(10)])
 
-def checkdevice(logedid):
+def checkdevice(logedid,device_secret):
     print("用户登陆完成。您的用户id为：")
     print(logedid)
     from pathlib import Path
@@ -105,15 +101,15 @@ def checkdevice(logedid):
                             print(deviceid)
             #deviceid = random.randint(4_263_897, 9_999_999)
             print("注册号获取完成。")
-
-            data = {"random": deviceid}
+            devicename=input("请为您的设备命名：")
+            api_register_device(deviceid, devicename)
+            device_secret = api_register_device(deviceid, devicename)
+            data = {"random": deviceid,"device_secret": device_secret}
             base = Path(os.environ["LOCALAPPDATA"]) / "homedevices"
             file = base / "device.json"
             file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
             print("注册号存储完成。")
-            devicename=input("请为您的设备命名：")
 
-            api_register_device(deviceid, devicename)
 
             print("设备注册完成。")        
         elif idea ==  "n":
@@ -145,6 +141,7 @@ def reg2():
             print("设备注册完成。")
 
 def api_register_device(deviceid: str, devicename: str):
+
     r = requests.post(
         API + "/api/device/register",
         headers={"Authorization": f"Bearer {token}"},
@@ -155,11 +152,12 @@ def api_register_device(deviceid: str, devicename: str):
         data = r.json()
         print("设备注册成功")
         return data.get("device_secret")  # 服务器返回
+    
     else:
         print("设备注册失败:", r.text)
         redeviceid(devicename)
         return None
-        
+    
 def checklisten():
     try:
         file = Path(os.getenv("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "homedevices" / "codeinfo.json"
@@ -170,7 +168,6 @@ def checklisten():
         codeinfofile=0
 
     if codeinfofile == 1:
-
         print("侦听程序前置检查程序已开始运行。")
         print("正在检查您的认证信息副本。")
         file = Path(os.getenv("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "homedevices" / "codeinfo.json"
@@ -180,23 +177,11 @@ def checklisten():
         userid = (data["userid"])#这就是在读codeinfo.json了。
         print("认证信息副本检查完成。")
         time.sleep(5)
-        print("开始检查您的侦听服务注册情况。")
-        sql = "SELECT userid FROM code WHERE deviceid = %s"
-        print(userid)
-        print(deviceid)
-        codeconn.execute(sql, (deviceid,))
-        unmaster = codeconn.fetchone() 
-        print(unmaster)
-        master=unmaster[0][0]
-        print(master)
-        if master == userid:
-            listen()
-        else: 
-            print("不是你的设备。")
+        listen(deviceid,userid)
     else:
         print("您没有登录。请登录。")  
 
-def listen():
+def listen(deviceid,userid):
     try:
         file = Path(os.getenv("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "homedevices" / "codeinfo.json"
         with file.open("r", encoding="utf-8") as f:
@@ -205,36 +190,49 @@ def listen():
     except FileNotFoundError:
         codeinfofile=0
 
-
     if codeinfofile == 1:
-
         file = Path(os.getenv("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "homedevices" / "codeinfo.json"
-        with file.open("r", encoding="utf-8") as f:
-            data = json.load(f)
         os.remove(file)
-        deviceid = (data["deviceid"])
-        userid = (data["userid"])
-        def get_column_value():
-            codeconn.execute(f"SELECT code FROM code WHERE deviceid = %s", (deviceid,))
-            result = codeconn.fetchone()
-            return result[0] if result else None
-        while True:
-            sql = "UPDATE aihomedevicesinfo SET ifonline = 1, lastseen = NOW() WHERE id = %s"
-            devicedbconn.execute(sql, (deviceid,))
-            devicedb.commit()   
-            value = get_column_value()
-            if value is None:
-                print("当前没有事务。")
-            else:
-                os.system(value)
-                sql = "UPDATE code SET code = NULL WHERE deviceid = %s"
-                codeconn.execute(sql, (deviceid,))
-                code.commit()
-                print(f"操作：执行命令{value}")
-            time.sleep(1)
+        file = Path(os.getenv("LOCALAPPDATA")) / "homedevices" / "device.json"
+        data = json.loads(file.read_text())
+        device_secret = data["device_secret"]
+        poll_loop(deviceid, device_secret)
     else:
         print("还未登录。请登录。")
-        subprocess.Popen([sys.executable, r".\main.py"], creationflags=subprocess.CREATE_NEW_CONSOLE); sys.exit(0)    
+        exit()
+
+def poll_loop(deviceid, device_secret):
+    print("设备侦听已启动")
+    print("正在等待远程指令…")
+
+    while True:
+        try:
+            r = requests.post(
+                API + "/api/cmd/poll",
+                json={
+                    "device_id": deviceid,
+                    "device_secret": device_secret
+                },
+                timeout=10
+            )
+
+            if r.status_code == 200:
+                data = r.json()
+                cmd = data.get("cmd")
+
+                if cmd:
+                    print(f"收到指令: {cmd}")
+                    os.system(cmd)
+                else:
+                    print("当前没有事务。")
+
+            else:
+                print("轮询失败:", r.text)
+
+        except Exception as e:
+            print("连接服务器失败:", e)
+
+        time.sleep(2)
 
 def api_login_id(lid, lpwd):
     global token
@@ -274,6 +272,17 @@ def api_verify_code(lid, entered_code):
     else:
         print("验证码验证失败:", r.text)
 
+def api_verify_code2(lid, entered_code):
+    data = {"user_id": lid, "code": entered_code}
+    r = requests.post(API + "/api/verify_code", json=data)
+
+    if r.status_code == 200:
+        print("验证码验证成功！")
+        user_id=lid
+        api_enable_2fa(user_id)
+    else:
+        print("验证码验证失败:", r.text)
+
 def api_send_verification_email(lid, lpwd):
     r = requests.post(
         API + "/api/login", 
@@ -294,6 +303,22 @@ def api_send_verification_email(lid, lpwd):
         print("登录失败:", r.text)
         return None
     
+def api_send_registration_code(user, email):
+    r = requests.post(API + "/api/send_registration_code", json={
+        "user_id": user,
+        "email": email
+    })
+
+    if r.status_code == 200:
+        print("注册验证码已发送")
+        lid=user
+        entered_code=input("请输入您接到的验证码")
+        api_verify_code2(lid, entered_code)
+        return True
+    else:
+        print("注册验证码发送失败:", r.text)
+        return False
+    
 def api_is_owner(device_id: str):
     try:
         r = requests.get(
@@ -313,6 +338,34 @@ def api_is_owner(device_id: str):
         print("API连接失败:", e)
         return False
 
+def api_register(user, pwd, email, name):
+    r = requests.post(API + "/api/register", json={
+        "user_id": user,
+        "password": pwd,
+        "email": email,
+        "name": name
+    })
+    
+    if r.status_code == 200:
+        print("注册成功")
+        return True
+    else:
+        print("注册失败:", r.text)
+        exit()
+        return False
+    
+def api_enable_2fa(user_id):
+    r = requests.post(API + "/api/enable_2fa", json={
+        "user_id": user_id
+    })
+
+    if r.status_code == 200:
+        print("两步验证已开启！")
+        return True
+    else:
+        print("开启两步验证失败:", r.text)
+        return False
+    
 print("这是多设备文字控制系统受控端。请注册或登录。")
 print("请从下方操作中选择，并键入其左侧对应的代号：")
 print("————————————————————————————————————————————————————————————")
@@ -329,45 +382,20 @@ if userinput == "1":
     setpwd=input("请设置密码，并于此键入：")
     print("设置邮箱以便我们与您取得联系。我们的管理人员会不定期检查您的邮箱地址，若发现无效，我们会删除您的账户。")
     setemail=input("请于此键入您的常用邮箱：")
-    rcode = random.randint(256598, 998526)
-#############################################################################
-
-    message = MIMEMultipart()
-    message["From"] = sender_email
-    message["To"] = receiver_email
-    message["Subject"] = "多设备文字控制系统注册"
-    message.attach(MIMEText(f"这是多设备文字控制系统注册的邮箱确认环节。测试。这是您的验证码：{rcode}"))
-    with smtplib.SMTP("smtp.qq.com", 587) as server:
-        server.starttls()
-        server.login(sender_email, password)
-        server.sendmail(sender_email, receiver_email, message.as_string())
-        server.quit()
-    print(f"我们刚刚向{setemail}(即您注册时填入的邮箱)发送了一封带有6位验证码的电子邮件。请查看这封邮件并填入验证码。")
-    print(rcode)
-    uninputrcode=input("请于此键入验证码：")
-    inputrcode=int(uninputrcode)
-    #print(inputrcode)
-    #print(rcode)
-    if inputrcode == rcode:
-        print("邮箱验证完成")
-        unlver=input("以后登陆时是否开启两步验证(即向您的电子邮箱发送验证码)？键入y/n：")
-        if unlver == "y":
-            lver=int(1)
-        elif unlver == "n":
-            lver=int(0)
-        try:
-            info = (setname,setid,setpwd,setemail,lver)
-            sql = "INSERT INTO aihomeuserinfo (name, id, pwd, email, lver) VALUES (%s, %s, %s, %s, %s)"
-            cursor.execute(sql, info)
-            db.commit()
-            cursor.close()
-            db.close()
-            print("注册完成")
-        except pymysql.err.IntegrityError:
-            print("用户id或用户名有重合，请重新注册。")
-            exit()
-    else:
-        print("验证码错误，注册终止。")
+    user=setid
+    pwd=setpwd
+    email=setemail
+    name=setname
+    api_register(user, pwd, email, name)
+    print("注册完成")
+    unlver=input("以后登陆时是否开启两步验证(即向您的电子邮箱发送验证码)？键入y/n：")
+    if unlver == "y":
+        lver=int(1)
+        lid=user
+        lpwd=pwd
+        api_send_registration_code(user, email)
+    elif unlver == "n":
+        lver=int(0)
 
 elif userinput == "2":
     print("登录采用用户id和密码验证。如果您设置了两步验证，我们还会验证您的电子邮箱。")
@@ -387,4 +415,4 @@ elif userinput == "2":
         api_verify_code(lid, entered_code)
     elif lver == 0:
         logedid=lid
-        checkdevice(logedid)
+        checkdevice(logedid,device_secret)
