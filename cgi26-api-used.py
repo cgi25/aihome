@@ -8,7 +8,7 @@ import time
 import sys, subprocess
 import wmi
 
-API = "https://api.yoururl.com"#替换为您的API地址
+API = "https://api.cgi26.cn"
 token = None
 device_secret = None
 
