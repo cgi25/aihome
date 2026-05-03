@@ -44,7 +44,7 @@ pip install fastapi pydantic uvicorn pymysql python-dotenv itsdangerous && uvico
 此时，您的API地址应为ip地址:8010(例如:111.11.111.11:8010)。您可以通过反向代理来使用域名。
 
 ## 5.修改客户端。
-下载main.py，将11行处的"https://api.yoururl.com"修改为上一步您获得的API地址。
+下载main.py，将11行处的`"https://api.yoururl.com"`修改为上一步您获得的API地址。
 
 ## 6.安装依赖并启动客户端。
 安装依赖。
